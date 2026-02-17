@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+
+# IDE
+.idea/
+
+# Generated artifacts
+artifacts/*
+!artifacts/.gitkeep
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+
+# Personal learning docs
+PERSONAL_MODEL_BELIEF_BREAKDOWN.md
