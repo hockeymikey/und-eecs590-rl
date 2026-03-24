@@ -1,0 +1,16 @@
+[project]
+name = "rl590-minis"
+version = "0.1.0"
+description = "EECS 590 Reinforcement Learning Mini Projects"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "numpy>=1.24,<3.0",
+    "matplotlib>=3.7,<4.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rl590"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
