@@ -6,10 +6,13 @@ Course repository for mini assignments and versioned RL project work at the Univ
 
 The foundation environment for this project is an **autonomous ice resurfacer
 (Zamboni)** built as a custom Gymnasium environment. It lives in a separate
-research repository and is installed as an editable dependency:
+research repository: https://gitbay.hockeymikey.com/hockeymikey/gym-zamboni
+
+Install as an editable dependency:
 
 ```bash
-pip install -e /path/to/autonomous-ice-resurfacer/gymnasium/
+git clone https://gitbay.hockeymikey.com/hockeymikey/gym-zamboni.git
+pip install -e gym-zamboni/
 ```
 
 **Environment characteristics:**
@@ -59,7 +62,8 @@ source .venv/bin/activate
 pip install -e .
 
 # Install foundation environment (separate repo)
-pip install -e /path/to/autonomous-ice-resurfacer/gymnasium/
+git clone https://gitbay.hockeymikey.com/hockeymikey/gym-zamboni.git
+pip install -e gym-zamboni/
 ```
 
 ## Classical Algorithms
