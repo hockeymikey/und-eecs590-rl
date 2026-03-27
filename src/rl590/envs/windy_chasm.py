@@ -51,6 +51,10 @@ class WindyChasmMDP:
     def start_index(self) -> int:
         return self.state_to_index(*self.start_state)
 
+    def reset(self, rng: Generator | None = None) -> int:
+        """Return the starting state index (deterministic for this env)."""
+        return self.start_index
+
     def is_terminal_state(self, state_index: int) -> bool:
         row, col = self.index_to_state(state_index)
         return col == 0 or col == self.cols - 1 or (row, col) == self.goal_state

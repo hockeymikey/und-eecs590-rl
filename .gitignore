@@ -15,8 +15,19 @@ venv/
 artifacts/*
 !artifacts/.gitkeep
 
+# Replay data (large, stored locally)
+replay_data/*
+!replay_data/.gitkeep
+
+# Checkpoints (large, stored locally)
+checkpoints/*
+!checkpoints/.gitkeep
+
 # Notebook checkpoints
 .ipynb_checkpoints/
 
 # Personal learning docs
 PERSONAL_MODEL_BELIEF_BREAKDOWN.md
+
+# Working docs (not deliverables)
+docs/v2_plan.md
