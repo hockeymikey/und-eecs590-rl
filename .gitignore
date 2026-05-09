@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *.so
 .pytest_cache/
+privee/
 
 # Virtual environments
 .venv/
@@ -10,6 +11,9 @@ venv/
 
 # IDE
 .idea/
+
+# OS
+**/.DS_Store
 
 # Generated artifacts
 artifacts/*
@@ -23,11 +27,11 @@ replay_data/*
 checkpoints/*
 !checkpoints/.gitkeep
 
+# SB3 training output (parent-level, post-rinkX-extraction)
+*.zip
+
 # Notebook checkpoints
 .ipynb_checkpoints/
 
-# Personal learning docs
-PERSONAL_MODEL_BELIEF_BREAKDOWN.md
-
-# Working docs (not deliverables)
-docs/v2_plan.md
+#Latex build files
+Minis/*/latex/build

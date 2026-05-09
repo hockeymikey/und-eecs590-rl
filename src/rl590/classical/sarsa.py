@@ -29,14 +29,14 @@ from typing import List, Dict
 import numpy as np
 from numpy.random import Generator, default_rng
 
+from rl590.primitives import NpzKey, SarsaAlgorithm, TraceType
+
 
 @dataclass
 class SarsaConfig:
     """Hyperparameters for SARSA variants."""
 
-    algorithm: str = "sarsa_lambda_backward"
-    # Options: sarsa_n_forward, sarsa_n_backward,
-    #          sarsa_lambda_forward, sarsa_lambda_backward
+    algorithm: str = SarsaAlgorithm.SARSA_LAMBDA_BACKWARD
 
     # SARSA parameters
     n: int = 4                 # lookahead steps for SARSA(n)
@@ -50,7 +50,7 @@ class SarsaConfig:
     epsilon_min: float = 0.01
 
     # Trace type for backward views
-    trace_type: str = "replacing"  # "replacing" or "accumulating"
+    trace_type: str = TraceType.REPLACING
 
     # Training
     episodes: int = 2000
@@ -87,10 +87,10 @@ class SarsaAgent:
     def train(self) -> Dict[str, float | int | str]:
         algo = self.config.algorithm
         dispatch = {
-            "sarsa_n_forward": self._train_sarsa_n_forward,
-            "sarsa_n_backward": self._train_sarsa_n_backward,
-            "sarsa_lambda_forward": self._train_sarsa_lambda_forward,
-            "sarsa_lambda_backward": self._train_sarsa_lambda_backward,
+            SarsaAlgorithm.SARSA_N_FORWARD: self._train_sarsa_n_forward,
+            SarsaAlgorithm.SARSA_N_BACKWARD: self._train_sarsa_n_backward,
+            SarsaAlgorithm.SARSA_LAMBDA_FORWARD: self._train_sarsa_lambda_forward,
+            SarsaAlgorithm.SARSA_LAMBDA_BACKWARD: self._train_sarsa_lambda_backward,
         }
         if algo not in dispatch:
             raise ValueError(f"Unknown algorithm: {algo}")
@@ -199,7 +199,7 @@ class SarsaAgent:
                 td_error = reward + cfg.gamma * q_next - self.Q[state, action]
 
                 # Update trace
-                if cfg.trace_type == "replacing":
+                if cfg.trace_type == TraceType.REPLACING:
                     traces[state, action] = 1.0
                 else:
                     traces[state, action] += 1.0
@@ -319,7 +319,7 @@ class SarsaAgent:
                 td_error = reward + cfg.gamma * q_next - self.Q[state, action]
 
                 # Update trace for current (state, action)
-                if cfg.trace_type == "replacing":
+                if cfg.trace_type == TraceType.REPLACING:
                     traces[state, action] = 1.0
                 else:
                     traces[state, action] += 1.0
@@ -376,15 +376,17 @@ class SarsaAgent:
         out.parent.mkdir(parents=True, exist_ok=True)
         np.savez(
             out,
-            Q=self.Q,
-            episode_returns=np.array(self.episode_returns),
-            episode_lengths=np.array(self.episode_lengths),
-            metadata=np.array(json.dumps(asdict(self.config))),
+            **{
+                NpzKey.Q: self.Q,
+                NpzKey.EPISODE_RETURNS: np.array(self.episode_returns),
+                NpzKey.EPISODE_LENGTHS: np.array(self.episode_lengths),
+                NpzKey.METADATA: np.array(json.dumps(asdict(self.config))),
+            },
         )
         return out
 
     def load(self, path: str | Path) -> None:
         data = np.load(path, allow_pickle=False)
-        self.Q = data["Q"]
-        self.episode_returns = data["episode_returns"].tolist()
-        self.episode_lengths = data["episode_lengths"].tolist()
+        self.Q = data[NpzKey.Q]
+        self.episode_returns = data[NpzKey.EPISODE_RETURNS].tolist()
+        self.episode_lengths = data[NpzKey.EPISODE_LENGTHS].tolist()

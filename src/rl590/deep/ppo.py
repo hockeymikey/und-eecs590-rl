@@ -42,6 +42,7 @@ import torch.nn as nn
 from torch.optim import Adam
 
 from rl590.networks import ZamboniCNN, GaussianActor, Critic
+from rl590.primitives import BatchKey
 
 
 @dataclass
@@ -197,11 +198,11 @@ class RolloutBuffer:
             idx = indices[start:end]
 
             yield {
-                "obs": torch.tensor(obs_array[idx], device=device),
-                "actions": torch.tensor(actions_array[idx], device=device),
-                "old_log_probs": torch.tensor(log_probs_array[idx], device=device),
-                "advantages": torch.tensor(adv[idx], device=device),
-                "returns": torch.tensor(self.returns[idx], device=device),
+                BatchKey.OBS: torch.tensor(obs_array[idx], device=device),
+                BatchKey.ACTIONS: torch.tensor(actions_array[idx], device=device),
+                BatchKey.OLD_LOG_PROBS: torch.tensor(log_probs_array[idx], device=device),
+                BatchKey.ADVANTAGES: torch.tensor(adv[idx], device=device),
+                BatchKey.RETURNS: torch.tensor(self.returns[idx], device=device),
             }
 
     def clear(self) -> None:
@@ -359,11 +360,11 @@ class PPOAgent:
 
         for epoch in range(cfg.n_epochs):
             for batch in self.buffer.get_batches(cfg.batch_size, self.device):
-                obs = batch["obs"]
-                actions = batch["actions"]
-                old_log_probs = batch["old_log_probs"]
-                advantages = batch["advantages"]
-                returns = batch["returns"]
+                obs = batch[BatchKey.OBS]
+                actions = batch[BatchKey.ACTIONS]
+                old_log_probs = batch[BatchKey.OLD_LOG_PROBS]
+                advantages = batch[BatchKey.ADVANTAGES]
+                returns = batch[BatchKey.RETURNS]
 
                 # ---- Policy loss (clipped surrogate objective) ----
                 # Compute log π_new(a|s) under the CURRENT policy

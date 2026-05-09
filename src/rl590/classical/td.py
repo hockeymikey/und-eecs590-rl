@@ -32,12 +32,14 @@ from typing import List, Dict
 import numpy as np
 from numpy.random import Generator, default_rng
 
+from rl590.primitives import NpzKey, TDPredictionAlgorithm, TraceType
+
 
 @dataclass
 class TDConfig:
     """Hyperparameters for TD prediction."""
 
-    algorithm: str = "td_n_forward"  # td_n_forward, td_n_backward, td_lambda_forward, td_lambda_backward
+    algorithm: str = TDPredictionAlgorithm.TD_N_FORWARD
 
     # TD parameters
     n: int = 4                 # lookahead steps for TD(n)
@@ -51,7 +53,7 @@ class TDConfig:
     epsilon_min: float = 0.01
 
     # Trace type for backward views
-    trace_type: str = "accumulating"  # "accumulating" or "replacing"
+    trace_type: str = TraceType.ACCUMULATING
 
     # Training
     episodes: int = 2000
@@ -99,10 +101,10 @@ class TDPredictionAgent:
     def train(self) -> Dict[str, float | int | str]:
         algo = self.config.algorithm
         dispatch = {
-            "td_n_forward": self._train_td_n_forward,
-            "td_n_backward": self._train_td_n_backward,
-            "td_lambda_forward": self._train_td_lambda_forward,
-            "td_lambda_backward": self._train_td_lambda_backward,
+            TDPredictionAlgorithm.TD_N_FORWARD: self._train_td_n_forward,
+            TDPredictionAlgorithm.TD_N_BACKWARD: self._train_td_n_backward,
+            TDPredictionAlgorithm.TD_LAMBDA_FORWARD: self._train_td_lambda_forward,
+            TDPredictionAlgorithm.TD_LAMBDA_BACKWARD: self._train_td_lambda_backward,
         }
         if algo not in dispatch:
             raise ValueError(f"Unknown algorithm: {algo}")
@@ -216,7 +218,7 @@ class TDPredictionAgent:
                 td_error = reward + cfg.gamma * self.V[next_state] * (1 - done) - self.V[state]
 
                 # Update trace for current state
-                if cfg.trace_type == "replacing":
+                if cfg.trace_type == TraceType.REPLACING:
                     traces[state] = 1.0
                 else:
                     traces[state] += 1.0
@@ -353,7 +355,7 @@ class TDPredictionAgent:
                 td_error = reward + cfg.gamma * self.V[next_state] * (1 - done) - self.V[state]
 
                 # Update trace for current state
-                if cfg.trace_type == "replacing":
+                if cfg.trace_type == TraceType.REPLACING:
                     traces[state] = 1.0
                 else:
                     traces[state] += 1.0
@@ -408,17 +410,19 @@ class TDPredictionAgent:
         out.parent.mkdir(parents=True, exist_ok=True)
         np.savez(
             out,
-            V=self.V,
-            Q=self.Q,
-            episode_returns=np.array(self.episode_returns),
-            episode_lengths=np.array(self.episode_lengths),
-            metadata=np.array(json.dumps(asdict(self.config))),
+            **{
+                NpzKey.V: self.V,
+                NpzKey.Q: self.Q,
+                NpzKey.EPISODE_RETURNS: np.array(self.episode_returns),
+                NpzKey.EPISODE_LENGTHS: np.array(self.episode_lengths),
+                NpzKey.METADATA: np.array(json.dumps(asdict(self.config))),
+            },
         )
         return out
 
     def load(self, path: str | Path) -> None:
         data = np.load(path, allow_pickle=False)
-        self.V = data["V"]
-        self.Q = data["Q"]
-        self.episode_returns = data["episode_returns"].tolist()
-        self.episode_lengths = data["episode_lengths"].tolist()
+        self.V = data[NpzKey.V]
+        self.Q = data[NpzKey.Q]
+        self.episode_returns = data[NpzKey.EPISODE_RETURNS].tolist()
+        self.episode_lengths = data[NpzKey.EPISODE_LENGTHS].tolist()

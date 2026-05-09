@@ -30,6 +30,8 @@ from typing import Dict
 import numpy as np
 from numpy.random import Generator, default_rng
 
+from rl590.primitives import BatchKey, NpzKey
+
 
 @dataclass
 class ReplayBufferConfig:
@@ -121,11 +123,11 @@ class ReplayBuffer:
 
         indices = rng.integers(0, self._size, size=batch_size)
         return {
-            "obs": self.observations[indices],
-            "actions": self.actions[indices],
-            "rewards": self.rewards[indices],
-            "next_obs": self.next_observations[indices],
-            "dones": self.dones[indices],
+            BatchKey.OBS: self.observations[indices],
+            BatchKey.ACTIONS: self.actions[indices],
+            BatchKey.REWARDS: self.rewards[indices],
+            BatchKey.NEXT_OBS: self.next_observations[indices],
+            BatchKey.DONES: self.dones[indices],
         }
 
     def save(self, path: str | Path, metadata: dict | None = None) -> Path:
@@ -154,12 +156,14 @@ class ReplayBuffer:
 
         np.savez_compressed(
             out,
-            observations=self.observations[:size],
-            actions=self.actions[:size],
-            rewards=self.rewards[:size],
-            next_observations=self.next_observations[:size],
-            dones=self.dones[:size],
-            metadata=np.array(json.dumps(meta)),
+            **{
+                NpzKey.OBSERVATIONS: self.observations[:size],
+                NpzKey.ACTIONS: self.actions[:size],
+                NpzKey.REWARDS: self.rewards[:size],
+                NpzKey.NEXT_OBSERVATIONS: self.next_observations[:size],
+                NpzKey.DONES: self.dones[:size],
+                NpzKey.METADATA: np.array(json.dumps(meta)),
+            },
         )
         return out
 
@@ -169,19 +173,19 @@ class ReplayBuffer:
         Returns the metadata dict stored with the file.
         """
         data = np.load(path, allow_pickle=False)
-        size = len(data["rewards"])
+        size = len(data[NpzKey.REWARDS])
 
         assert size <= self.config.max_size, (
             f"Saved buffer ({size}) exceeds configured max_size ({self.config.max_size})"
         )
 
-        self.observations[:size] = data["observations"]
-        self.actions[:size] = data["actions"]
-        self.rewards[:size] = data["rewards"]
-        self.next_observations[:size] = data["next_observations"]
-        self.dones[:size] = data["dones"]
+        self.observations[:size] = data[NpzKey.OBSERVATIONS]
+        self.actions[:size] = data[NpzKey.ACTIONS]
+        self.rewards[:size] = data[NpzKey.REWARDS]
+        self.next_observations[:size] = data[NpzKey.NEXT_OBSERVATIONS]
+        self.dones[:size] = data[NpzKey.DONES]
 
-        meta = json.loads(str(data["metadata"]))
+        meta = json.loads(str(data[NpzKey.METADATA]))
         self._size = size
         self._pos = meta.get("pos", size % self.config.max_size)
         self._total_added = meta.get("total_added", size)

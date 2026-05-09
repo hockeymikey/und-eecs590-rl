@@ -18,12 +18,14 @@ from typing import List, Dict
 import numpy as np
 from numpy.random import Generator, default_rng
 
+from rl590.primitives import MCMethod, NpzKey
+
 
 @dataclass
 class MCConfig:
     """Hyperparameters for Monte Carlo control."""
 
-    method: str = "first_visit"  # "first_visit" or "every_visit"
+    method: str = MCMethod.FIRST_VISIT
 
     # Learning
     gamma: float = 0.95
@@ -79,7 +81,7 @@ class MCAgent:
         cfg = self.config
         rng = default_rng(cfg.seed)
         eps = cfg.epsilon
-        first_visit = cfg.method == "first_visit"
+        first_visit = cfg.method == MCMethod.FIRST_VISIT
 
         for ep in range(cfg.episodes):
             # --- Step 1: Generate a complete episode ---
@@ -167,20 +169,22 @@ class MCAgent:
         out.parent.mkdir(parents=True, exist_ok=True)
         np.savez(
             out,
-            Q=self.Q,
-            returns_sum=self._returns_sum,
-            returns_count=self._returns_count,
-            episode_returns=np.array(self.episode_returns),
-            episode_lengths=np.array(self.episode_lengths),
-            metadata=np.array(json.dumps(asdict(self.config))),
+            **{
+                NpzKey.Q: self.Q,
+                NpzKey.RETURNS_SUM: self._returns_sum,
+                NpzKey.RETURNS_COUNT: self._returns_count,
+                NpzKey.EPISODE_RETURNS: np.array(self.episode_returns),
+                NpzKey.EPISODE_LENGTHS: np.array(self.episode_lengths),
+                NpzKey.METADATA: np.array(json.dumps(asdict(self.config))),
+            },
         )
         return out
 
     def load(self, path: str | Path) -> None:
         """Load a previously saved agent."""
         data = np.load(path, allow_pickle=False)
-        self.Q = data["Q"]
-        self._returns_sum = data["returns_sum"]
-        self._returns_count = data["returns_count"]
-        self.episode_returns = data["episode_returns"].tolist()
-        self.episode_lengths = data["episode_lengths"].tolist()
+        self.Q = data[NpzKey.Q]
+        self._returns_sum = data[NpzKey.RETURNS_SUM]
+        self._returns_count = data[NpzKey.RETURNS_COUNT]
+        self.episode_returns = data[NpzKey.EPISODE_RETURNS].tolist()
+        self.episode_lengths = data[NpzKey.EPISODE_LENGTHS].tolist()

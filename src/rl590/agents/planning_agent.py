@@ -7,11 +7,12 @@ from pathlib import Path
 import numpy as np
 
 from rl590.dp.planning import policy_iteration, q_value_policy_iteration, value_iteration
+from rl590.primitives import DPAlgorithm, NpzKey
 
 
 @dataclass
 class AgentConfig:
-    algorithm: str = "policy_iteration"
+    algorithm: str = DPAlgorithm.POLICY_ITERATION
     epsilon: float = 1e-8
     max_iterations: int = 10_000
     episodes: int = 20
@@ -33,7 +34,7 @@ class PlanningAgent:
     def train(self) -> dict[str, float | int | str]:
         algo = self.config.algorithm
 
-        if algo == "value_iteration":
+        if algo == DPAlgorithm.VALUE_ITERATION:
             V, Q, policy, deltas, iterations = value_iteration(
                 self.env.P,
                 self.env.R,
@@ -41,7 +42,7 @@ class PlanningAgent:
                 epsilon=self.config.epsilon,
                 max_iterations=self.config.max_iterations,
             )
-        elif algo == "policy_iteration":
+        elif algo == DPAlgorithm.POLICY_ITERATION:
             V, Q, policy, deltas, iterations = policy_iteration(
                 self.env.P,
                 self.env.R,
@@ -49,7 +50,7 @@ class PlanningAgent:
                 epsilon=self.config.epsilon,
                 max_iterations=self.config.max_iterations,
             )
-        elif algo == "q_policy_iteration":
+        elif algo == DPAlgorithm.Q_POLICY_ITERATION:
             V, Q, policy, deltas, iterations = q_value_policy_iteration(
                 self.env.P,
                 self.env.R,
@@ -60,7 +61,7 @@ class PlanningAgent:
         else:
             raise ValueError(
                 f"Unsupported algorithm: {algo}. "
-                "Expected one of value_iteration, policy_iteration, q_policy_iteration."
+                f"Expected one of {[a.value for a in DPAlgorithm]}."
             )
 
         self.V = V
@@ -114,18 +115,18 @@ class PlanningAgent:
         out.parent.mkdir(parents=True, exist_ok=True)
 
         payload: dict[str, np.ndarray] = {
-            "policy": self.policy,
-            "V": self.V,
-            "metadata": np.array(json.dumps(asdict(self.config))),
+            NpzKey.POLICY: self.policy,
+            NpzKey.V: self.V,
+            NpzKey.METADATA: np.array(json.dumps(asdict(self.config))),
         }
         if self.Q is not None:
-            payload["Q"] = self.Q
+            payload[NpzKey.Q] = self.Q
 
         np.savez(out, **payload)
         return out
 
     def load(self, path: str | Path) -> None:
         data = np.load(path, allow_pickle=False)
-        self.policy = data["policy"]
-        self.V = data["V"]
-        self.Q = data["Q"] if "Q" in data.files else None
+        self.policy = data[NpzKey.POLICY]
+        self.V = data[NpzKey.V]
+        self.Q = data[NpzKey.Q] if NpzKey.Q in data.files else None

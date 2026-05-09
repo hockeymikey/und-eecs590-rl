@@ -9,12 +9,17 @@ from rl590.agents.planning_agent import AgentConfig, PlanningAgent
 from rl590.envs.windy_chasm import WindyChasmMDP
 from rl590.dp.planning import policy_iteration, q_value_policy_iteration, value_iteration
 from rl590.model.belief import BeliefConfig, TabularModelBelief, collect_transitions, evaluate_policy
+from rl590.primitives import DPAlgorithm, NpzKey
 from rl590.utils.plotting import plot_convergence
 from rl590.utils.render import render_policy_ascii, render_values_ascii
 
 
 def _common_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--algorithm", default="policy_iteration", choices=["value_iteration", "policy_iteration", "q_policy_iteration"])
+    parser.add_argument(
+        "--algorithm",
+        default=DPAlgorithm.POLICY_ITERATION,
+        choices=[a.value for a in DPAlgorithm],
+    )
     parser.add_argument("--p-center", type=float, default=0.1)
     parser.add_argument("--goal-col", type=int, default=3)
     parser.add_argument("--crash-penalty", type=float, default=-100.0)
@@ -159,7 +164,7 @@ def main() -> None:
 
         P_hat, R_hat = belief.estimated_mdp()
 
-        if args.algorithm == "value_iteration":
+        if args.algorithm == DPAlgorithm.VALUE_ITERATION:
             V, Q, policy, deltas, iterations = value_iteration(
                 P_hat,
                 R_hat,
@@ -167,7 +172,7 @@ def main() -> None:
                 epsilon=args.epsilon,
                 max_iterations=args.max_iterations,
             )
-        elif args.algorithm == "policy_iteration":
+        elif args.algorithm == DPAlgorithm.POLICY_ITERATION:
             V, Q, policy, deltas, iterations = policy_iteration(
                 P_hat,
                 R_hat,
@@ -175,7 +180,7 @@ def main() -> None:
                 epsilon=args.epsilon,
                 max_iterations=args.max_iterations,
             )
-        elif args.algorithm == "q_policy_iteration":
+        elif args.algorithm == DPAlgorithm.Q_POLICY_ITERATION:
             V, Q, policy, deltas, iterations = q_value_policy_iteration(
                 P_hat,
                 R_hat,
@@ -188,10 +193,14 @@ def main() -> None:
 
         np.savez(
             args.model_path,
-            policy=policy,
-            V=V,
-            Q=Q,
-            metadata=np.array([f"learned_from_belief_updates={belief.num_updates}"]),
+            **{
+                NpzKey.POLICY: policy,
+                NpzKey.V: V,
+                NpzKey.Q: Q,
+                NpzKey.METADATA: np.array(
+                    [f"learned_from_belief_updates={belief.num_updates}"]
+                ),
+            },
         )
 
         eval_stats = evaluate_policy(

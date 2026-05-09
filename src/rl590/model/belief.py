@@ -6,6 +6,8 @@ from pathlib import Path
 import numpy as np
 from numpy.random import Generator, default_rng
 
+from rl590.primitives import NpzKey
+
 
 @dataclass
 class BeliefConfig:
@@ -97,19 +99,23 @@ class TabularModelBelief:
         out.parent.mkdir(parents=True, exist_ok=True)
         np.savez(
             out,
-            transition_counts=self.transition_counts,
-            reward_counts=self.reward_counts,
-            reward_sums=self.reward_sums,
-            num_updates=np.array([self.num_updates], dtype=int),
+            **{
+                NpzKey.TRANSITION_COUNTS: self.transition_counts,
+                NpzKey.REWARD_COUNTS: self.reward_counts,
+                NpzKey.REWARD_SUMS: self.reward_sums,
+                NpzKey.NUM_UPDATES: np.array([self.num_updates], dtype=int),
+            },
         )
         return out
 
     def load(self, path: str | Path) -> None:
         data = np.load(path, allow_pickle=False)
-        self.transition_counts = data["transition_counts"]
-        self.reward_counts = data["reward_counts"]
-        self.reward_sums = data["reward_sums"]
-        self.num_updates = int(data["num_updates"][0]) if "num_updates" in data.files else 0
+        self.transition_counts = data[NpzKey.TRANSITION_COUNTS]
+        self.reward_counts = data[NpzKey.REWARD_COUNTS]
+        self.reward_sums = data[NpzKey.REWARD_SUMS]
+        self.num_updates = (
+            int(data[NpzKey.NUM_UPDATES][0]) if NpzKey.NUM_UPDATES in data.files else 0
+        )
 
 
 def collect_transitions(
