@@ -1,155 +1,62 @@
-# EECS 590: Reinforcement Learning
+# EECS 590 RL — Mini-project repo
 
-Course repository for mini assignments and versioned RL project work at the University of North Dakota (Spring 2026).
+University of North Dakota, Spring 2026. Version-graded mini-project repo for EECS 590 *Reinforcement Learning*. The codebase covers the V1/V2 tabular content (DP, MC, TD(n)/TD(λ), SARSA, Q-learning) and the V3 capstone: an autonomous-Zamboni foundation environment with a BC-warmstarted, from-scratch PPO trained against both a Gymnasium image-obs env and an Isaac Sim variant.
 
-## Foundation Environment
+**Instructor:** Dr. Alex Lowenstein. **Authorship:** solo work; AI-assistance disclosure in [`docs/AI_usage.md`](docs/AI_usage.md).
 
-The foundation environment for this project is an **autonomous ice resurfacer
-(Zamboni)** built as a custom Gymnasium environment. It lives in a separate
-research repository: https://gitbay.hockeymikey.com/hockeymikey/gym-zamboni
-
-Install as an editable dependency:
-
-```bash
-git clone https://gitbay.hockeymikey.com/hockeymikey/gym-zamboni.git
-pip install -e gym-zamboni/
-```
-
-**Environment characteristics:**
-- **Observation**: 2-channel image (129x304x2) — ice roughness/elevation map + agent position heatmap
-- **Action space**: Continuous (throttle, steering), each in [-1, 1]
-- **Physics**: Dynamic bicycle model with ice friction, RK4 integration
-- **Reward**: Ice improvement bonus + exploration coverage - time penalty - collision penalty
-- **Goal**: Learn to resurface a full ice rink efficiently while avoiding walls
-
-## Repository Layout
-
-```text
-.
-├── src/rl590/                      # Core RL library
-│   ├── classical/                  # Model-free tabular algorithms
-│   │   ├── mc.py                   # Monte Carlo (first-visit / every-visit)
-│   │   ├── td.py                   # TD(n) and TD(λ), forward + backward views
-│   │   ├── sarsa.py                # SARSA(n) and SARSA(λ), forward + backward views
-│   │   └── qlearning.py            # Q-learning (off-policy TD(0))
-│   ├── deep/                       # Deep RL algorithms (PPO, etc.)
-│   ├── networks/                   # Neural network architectures (CNNs for Zamboni)
-│   ├── buffers/                    # Replay buffer and experience storage
-│   ├── visualization/              # Saliency analysis and plotting
-│   ├── dp/                         # Dynamic programming (VI / PI)
-│   ├── envs/                       # Tabular environments (WindyChasm)
-│   ├── agents/                     # Agent wrappers (planning agent)
-│   ├── model/                      # Bayesian belief model for bootstrap RL
-│   └── utils/                      # Rendering + plotting helpers
-├── M1/, M2/, M3/                   # Mini project submissions (historical)
-├── checkpoints/                    # Saved NN weights (gitignored, local only)
-├── replay_data/                    # Raw experience data (gitignored, local only)
-├── scripts/                        # CLI entry points
-├── docs/                           # Assignment specs, technical challenges
-├── tests/                          # Smoke tests
-└── notebooks/                      # Experiment notebooks
-```
+Everything is in-tree under `src/rl590/`. No sibling research repos need to be cloned for the graded surface.
 
 ## Setup
 
 ```bash
-# Using uv (recommended)
-uv sync
-
-# Or using pip
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e .
-
-# Install foundation environment (separate repo)
-git clone https://gitbay.hockeymikey.com/hockeymikey/gym-zamboni.git
-pip install -e gym-zamboni/
+uv sync                  # creates the venv from pyproject.toml + uv.lock
 ```
 
-## Classical Algorithms
+That's it for the gym-side workflow (tabular + foundation env + BC + from-scratch PPO).
 
-All classical algorithms work with any tabular environment providing `reset()`,
-`simulate_step()`, `num_states`, and `num_actions`. Tested on WindyChasm (140
-states, 3 actions) and ReactorEnv (20 states, 5 actions).
+The Isaac Sim variant runs inside the Isaac Lab 2.3.2 container and has its own non-trivial setup path on Arch Linux. If you want to reproduce the Isaac runs, start with `docs/isaacsim_setup_issues.md` — it documents the full setup including the upstream bugs you'll hit and the workarounds I'm using.
 
-```python
-from rl590.classical import MCAgent, MCConfig
-from rl590.envs.windy_chasm import WindyChasmMDP
+## Running things
 
-env = WindyChasmMDP()
-agent = MCAgent(env, MCConfig(episodes=2000, epsilon_decay=0.999))
-agent.train()
-print(agent.evaluate())
-```
+All recipes are in the `Justfile`. `just` with no arguments lists everything.
 
-**Implemented algorithms:**
-
-| Algorithm | Module | Variants |
-|-----------|--------|----------|
-| Monte Carlo | `mc.py` | First-visit, every-visit |
-| TD(n) | `td.py` | Forward-view, backward-view (with traces) |
-| TD(λ) | `td.py` | Forward-view, backward-view (with traces) |
-| SARSA(n) | `sarsa.py` | Forward-view, backward-view (with traces) |
-| SARSA(λ) | `sarsa.py` | Forward-view, backward-view (with traces) |
-| Q-learning | `qlearning.py` | Off-policy TD(0) |
-
-## Deep RL Algorithm Justification
-
-### Choice: PPO (Proximal Policy Optimization)
-
-PPO is the primary deep RL algorithm for the Zamboni foundation environment.
-This choice is driven by the environment's characteristics: **continuous action
-space** (throttle + steering) and **high-dimensional image observations**
-(129x304x2).
-
-**Comparison to all candidate algorithms:**
-
-| Algorithm | Fits Zamboni? | Reasoning |
-|-----------|--------------|-----------|
-| **DQN** | Poor | Requires discrete actions. Would need to discretize throttle/steering into bins, losing precision in a domain where smooth continuous control matters (e.g., gradual turns around rink corners). |
-| **REINFORCE** | Marginal | Handles continuous actions but has high variance due to Monte Carlo returns. The Zamboni's long episodes (2000 steps) make variance a serious problem — entire episodes of good behavior get drowned by one bad collision. |
-| **Vanilla Actor-Critic** | Okay | Reduces REINFORCE's variance with a critic baseline, but lacks any trust region mechanism. Unbounded policy updates can destabilize training, especially with the Zamboni's complex reward landscape (ice improvement vs. collision avoidance vs. coverage). |
-| **DDPG** | Decent | Designed for continuous control, but deterministic policy + single critic makes it brittle. Known for sensitivity to hyperparameters and overestimation bias. The Zamboni's sparse collision penalties can cause catastrophic value overestimation. |
-| **TD3** | Good | Fixes DDPG's overestimation with twin critics and delayed updates. A strong candidate, but off-policy methods require large replay buffers for the Zamboni's high-dimensional observations (each transition stores a 129x304x2 image). |
-| **PPO** | Very Good | On-policy, so no replay buffer memory concerns for image observations. Clipped surrogate objective prevents destructive policy updates. Robust to hyperparameter choices — critical when training is expensive (Zamboni physics simulation is slow). GAE provides tunable bias-variance tradeoff. Industry-proven for robotics and continuous control. |
-| **TRPO** | Good | Similar trust-region benefits to PPO but requires computing the Fisher information matrix and conjugate gradient optimization — significantly more complex to implement correctly with no clear performance advantage over PPO for this domain. |
-| **SAC** | Very Good | Maximum entropy framework naturally encourages exploration, valuable for rink coverage. However, off-policy (large replay buffer for images) and adds temperature auto-tuning complexity. Strong second choice if PPO underperforms. |
-
-**Why PPO wins for the Zamboni:**
-1. **On-policy** — avoids storing millions of 129x304x2 images in a replay buffer
-2. **Stable** — clipped objective prevents the catastrophic policy collapses that plague DDPG/vanilla PG in collision-heavy environments
-3. **Continuous actions** — Gaussian policy outputs mean and std for throttle/steering
-4. **Proven for robotics** — used in OpenAI's robotic manipulation, locomotion tasks with similar continuous control characteristics
-5. **Manageable cons** — lower sample efficiency than off-policy methods, but the Zamboni simulator is deterministic and parallelizable
-
-## Dynamic Programming (V1)
-
-Train with policy iteration on WindyChasm:
+### Tabular (V1 / V2)
 
 ```bash
-python3 scripts/run_windy.py train --algorithm policy_iteration
+just windy-train policy_iteration    # DP on WindyChasm
+just windy-eval                      # evaluate the saved policy
+just windy-bootstrap-model           # belief-model bootstrap workflow
+just demo-classical                  # MC, TD, SARSA, Q-learning demo
+just test                            # smoke tests
 ```
 
-Evaluate a saved model:
+### Foundation env — gym side (V3)
 
 ```bash
-python3 scripts/run_windy.py eval --model-path artifacts/windy_best_policy.npz
+just gym-smoke                       # import + step ZambGymEnv
+just gym-teacher-smoke               # roll out the coverage-path teacher
+just gym-bc                          # fit BC actor on the teacher
+just gym-ppo-scratch                 # train PPO from scratch
+just gym-ppo-bc                      # train PPO with BC warmstart
+just gym-tb                          # TensorBoard for BC + PPO runs
 ```
 
-Bootstrap from sampled transitions:
+### Foundation env — Isaac side (V3)
 
-```bash
-python3 scripts/run_windy.py bootstrap-model --algorithm policy_iteration
-```
+The Isaac scripts live in `scripts/` and run inside the Isaac Lab container; see `docs/isaacsim_setup_issues.md` for the setup and `docs/decisions.md` (Isaac Sim section) for what they actually do.
 
-## Legacy Files
+## Documentation
 
-`M1/`, `M2/`, `M3/` are preserved as historical mini-project submissions.
-`src/rl590/` is the consolidated library used for all version updates.
+The narrative lives under `docs/`. In priority order for a reviewer:
 
-## Citations / Collaboration
+| Doc | What's in it |
+|---|---|
+| [`docs/decisions.md`](docs/decisions.md) | What I chose to implement, what I chose not to, and why. Most authoritative narrative. |
+| [`docs/technical-challenges.md`](docs/technical-challenges.md) | Bugs, surprises, debugging stories — including the PPO Run 1/2 collapse and the reward-shape bug. |
+| [`docs/zamb_gym_env.md`](docs/zamb_gym_env.md) | Foundation env reference: observation, action, reward, test recipes. |
+| [`docs/isaacsim_setup_issues.md`](docs/isaacsim_setup_issues.md) | Isaac Lab 2.3.2 on Arch Linux — every upstream bug encountered and the fix. |
+| [`docs/v1.md`](docs/v1.md) / [`docs/v2.md`](docs/v2.md) / [`docs/v3.md`](docs/v3.md) | Course assignment specs for each version. |
 
-- Sutton & Barto, *Reinforcement Learning: An Introduction* (2nd ed.)
-- Schulman et al., *Proximal Policy Optimization Algorithms* (2017)
-- Farama Foundation, Gymnasium
-- 
+## Citations and AI usage
+
+See [`CITATIONS.md`](CITATIONS.md) for the full citation list (textbook, PPO/GAE papers, domain references, software dependencies) and [`docs/AI_usage.md`](docs/AI_usage.md) for the AI-assistance disclosure. Short version: Claude was used as a code-review, debugging, and documentation-drafting collaborator; all implementation, training, debugging decisions, and conclusions are mine.

@@ -27,7 +27,10 @@ replay_data/*
 checkpoints/*
 !checkpoints/.gitkeep
 
-# SB3 training output (parent-level, post-rinkX-extraction)
+# Training outputs (TensorBoard logs, .pt checkpoints, SB3 zips)
+training_runs/
+
+# SB3 training output
 *.zip
 
 # Notebook checkpoints

@@ -53,17 +53,23 @@ during development.
 
 ### Foundation Environment (Zamboni)
 
-- **Observation space**: The Zamboni environment outputs 2-channel images
-  (129x304x2) — ice roughness map and agent position heatmap. This rules out
-  tabular methods entirely and requires CNN-based function approximation.
+- **Observation space**: `ZambGymEnv` outputs a 3-channel image at nav-grid
+  resolution (~129×304×3 by default): damage magnitude (normalised), agent-
+  pose hot pixel, and refreeze-progress in `[0, 1]`. This rules out tabular
+  methods entirely and requires CNN-based function approximation.
 
 - **Continuous action space**: Throttle and steering are both continuous in
   [-1, 1]. This eliminates DQN (discrete actions only) as a primary algorithm
   choice and points toward policy gradient methods (PPO, SAC, DDPG, TD3).
 
-- **Separate codebases**: The Zamboni environment lives in a separate research
-  repository since it will be used for a paper beyond this course. Integrated
-  via `pip install -e` to keep codebases independent while allowing imports.
+- **Adaptation boundary**: The Minis env is a stripped-down, modified
+  adaptation of a private prototype that lives outside this course repo.
+  The submitted copy is self-contained (no imports back into that workspace),
+  uses a deliberately simpler linear refreeze placeholder, and pins
+  course-specific reward coefficients. The frozen coverage-path teacher npz at
+  `assets/teacher/coverage_path_v1.npz` is the only artefact crossing the
+  workspace boundary, and only as data — the path-generation algorithm
+  itself stays out of this repo.
 
 ### Neural Network Architecture
 
@@ -119,8 +125,8 @@ during development.
 
 ## Capstone — Foundation Env Training Runs
 
-Headless overnight PPO runs on `RinkEnv` (rinkgym repo, separate codebase) using
-SB3 with a custom CNN extractor. Three stories, in order of discovery.
+Headless PPO runs on an earlier prototype environment using SB3 with a custom
+CNN extractor. Three stories, in order of discovery.
 
 ### Run 1 — Vanilla PPO Policy Collapse
 
@@ -160,8 +166,8 @@ SB3 with a custom CNN extractor. Three stories, in order of discovery.
   while reporting only `improvement_pct ~16–26%` and `visited_nav_pct ~1.58%`.
   These numbers don't add up — a coverage policy that supposedly resurfaces
   16% of the rink should be scoring better than a PPO policy that doesn't.
-- **Cause**: `RinkEnv._compute_reward()` (rink_env.py:694) hands out +0.1 for
-  visiting a new cell in `visited_mask` and -0.05 for repeats. But
+- **Cause**: the prototype reward handed out +0.1 for visiting a new cell in
+  `visited_mask` and -0.05 for repeats. But
   `visited_mask` is a *center-point trace* — it only marks the single nav-grid
   cell under the Zamboni's center, not the actual brush-width footprint
   (`brush_visited_mask`). Driving a wide methodical resurface pattern earns
@@ -172,14 +178,89 @@ SB3 with a custom CNN extractor. Three stories, in order of discovery.
   = +62, minus ~6 time penalty = 56. Reported total: 53. So even the "good"
   baseline is being measured almost entirely on path diversity, not on actual
   ice coverage.
-- **Why this matters**: This bug is already documented as Item 4 in
-  rinkgym's `docs/gymnasium-api-conformance.md` (the `visited_mask` vs
-  `brush_visited_mask` distinction in metrics) — but it's *also* in the reward
-  function, not just the metrics. Both Run 1 and Run 2 were optimizing the
-  wrong objective. The "fix" for the next run is to (a) swap the exploration
-  bonus to `brush_visited_mask`, (b) weight `total_elevation_change` enough
-  that it's a real signal rather than rounding error, and (c) audit the
-  `collision_penalty` sign — the contract should clearly penalize wall hits.
+- **Why this matters**: The same center-trace-vs-brush-footprint distinction
+  had already shown up in metrics, but it was also present in the reward
+  function. Both Run 1 and Run 2 were optimizing the wrong objective. The fix
+  for the submitted env is to reward brush-footprint coverage directly, weight
+  damage reduction enough to be a real signal, and keep wall contacts clearly
+  negative.
 - **Lesson**: Before tuning RL hyperparameters, *read the reward function*.
   A policy can only learn to maximize what you actually reward, and "what you
   actually reward" can drift from "what you mean to reward" silently.
+
+## V3 — Isaac Sim platform debugging
+
+Setting up Isaac Lab 2.3.2 on Arch Linux for the V3 Isaac Sim attempt
+surfaced four distinct upstream bugs in the NVIDIA/Omniverse stack. Each
+took meaningful debugging time; together they consumed most of a day. Full
+narrative and exact commands live in `docs/isaacsim_setup_issues.md`; summaries
+here.
+
+- **Isaac Lab `flatdict==4.0.1` build failure on modern pip**. The main
+  `isaaclab` package pulls `flatdict==4.0.1` (last released 2019) as a
+  transitive dependency. Modern pip's isolated build environment doesn't
+  ship `pkg_resources` in its default setuptools, and flatdict's `setup.py`
+  imports it. The build fails. **The killer detail**: this failure aborts
+  the `isaaclab` install silently — `./isaaclab.sh --install` continues
+  through the *other* subpackages (`isaaclab_rl`, `isaaclab_tasks`,
+  `isaaclab_assets`, `isaaclab_mimic`) and reports success, leaving you
+  with everything installed *except* the top-level `isaaclab` module that
+  every entry-point script needs. Symptom: `ModuleNotFoundError: No module
+  named 'isaaclab'` after a "successful" install. **Fix**: downgrade pip
+  and setuptools before the install (`pip==23 setuptools==65`), pre-install
+  flatdict in that older env, then run `./isaaclab.sh --install`. Tracked
+  upstream as isaac-sim/IsaacLab #4576 (proposal to drop flatdict) and #4577
+  (the build failure itself).
+- **NVIDIA Container Toolkit 1.19 fails to mount the Vulkan ICD on Arch**.
+  With `NVIDIA_DRIVER_CAPABILITIES=all` set, the toolkit mounts the NVIDIA
+  GPU userspace libraries into the container (so `nvidia-smi` works) but
+  *doesn't* mount `/usr/share/vulkan/icd.d/nvidia_icd.json`. Inside the
+  container Vulkan loader can't find the NVIDIA ICD; Isaac Sim dies at
+  `vkCreateInstance failed. Vulkan 1.1 is not supported`. The Vulkan
+  `.so` files are mounted; only the ICD JSON descriptor is missing.
+  Confusingly, the error message points at the driver, not at the
+  container-mount layer. **Fix**: add an explicit bind mount in
+  `docker-compose.local.yaml` for `nvidia_icd.json` (and the matching EGL
+  vendor descriptor). One yaml line; took hours to identify.
+- **NVIDIA driver 595.x not validated for Isaac Sim 5.1**. The headline bug.
+  After fixing flatdict and the Vulkan ICD mount, Isaac Sim loaded all
+  ~140 of its Kit extensions, reached "app ready", then segfaulted in
+  `librtx.scenedb.plugin.so` (the RTX scene-database plugin) with a null-
+  pointer write inside a `std::vector::_M_realloc_insert` call —
+  `error 6 at 0x3380`, the classic "deref a null pointer at a struct
+  member offset." Wasted hours theorizing about laptop-Ampere feature
+  enumeration, PCIe Gen 1 link width, IOMMU, and hybrid-GPU Vulkan device
+  selection. The actual cause was much simpler: NVIDIA driver 595.x is
+  outside the validated driver list for Isaac Sim 5.1; confirmed in a
+  github issue thread reporting the same crash on RTX 4070, 5070 Ti, 5080,
+  and 5090 — i.e., not hardware-specific. **Fix**: downgrade to driver
+  `580.65.06` (Linux) via the Arch Linux Archive
+  (`archive.archlinux.org/packages/n/nvidia-utils/`), pin in
+  `pacman.conf` so `pacman -Syu` doesn't re-upgrade. **Lesson**: when a
+  closed-source binary segfaults in a way that looks hardware-specific,
+  search for reports on workstation hardware too. Mobile-GPU theories
+  burned a lot of time on what turned out to be a universal driver
+  incompatibility.
+- **Bind-mount + editable install shadowing**. Isaac Lab's docker-compose
+  bind-mounts the host's `source/` directory into the container at
+  `/workspace/isaaclab/source/`. The Dockerfile runs
+  `./isaaclab.sh --install` at build time, which writes `.egg-info`
+  directories into `source/`. At runtime, those build-time `.egg-info`s
+  get shadowed by the host bind mount, and editable-install metadata in
+  the container's site-packages points at paths that no longer match the
+  source layout — especially if you switched IsaacLab git tags between
+  build and run. Net effect: install metadata exists but resolves to
+  empty/wrong dirs. **Lesson**: with bind-mounted source dirs, editable
+  installs that write metadata into the source tree at build time are
+  fragile across container restarts. Either re-run the install at runtime
+  (and let the metadata land on the bind-mounted host filesystem so it
+  persists), or build the install into a non-mounted path inside the
+  container image.
+
+The four bugs above are also why I chose to keep the Isaac Sim attempt
+*present but deliberately minimal* in the V3 submission. The platform-
+debugging effort matches V3.md's explicit framing that "a student
+struggling to implement basic functionality in Isaac sim will perform
+better than a student who took an afternoon to train a single super-human
+agent for a gym-like environment." The actual Isaac env code is small; what
+made it a multi-day effort was the path *to* running code, not writing it.

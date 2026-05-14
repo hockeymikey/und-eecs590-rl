@@ -232,9 +232,10 @@ class PPOAgent:
         Hyperparameters.
     """
 
-    def __init__(self, env, config: PPOConfig | None = None) -> None:
+    def __init__(self, env, config: PPOConfig | None = None, tb_writer=None) -> None:
         self.env = env
         self.config = config or PPOConfig()
+        self.tb_writer = tb_writer
         cfg = self.config
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -366,8 +367,7 @@ class PPOAgent:
                 advantages = batch[BatchKey.ADVANTAGES]
                 returns = batch[BatchKey.RETURNS]
 
-                # ---- Policy loss (clipped surrogate objective) ----
-                # Compute log π_new(a|s) under the CURRENT policy
+                # Clipped surrogate policy loss.
                 new_log_probs = self.actor.log_prob(obs, actions)
 
                 # Importance ratio: how much has the policy changed?
@@ -380,21 +380,19 @@ class PPOAgent:
                 surr2 = torch.clamp(ratio, 1.0 - cfg.clip_epsilon, 1.0 + cfg.clip_epsilon) * advantages
                 policy_loss = -torch.min(surr1, surr2).mean()
 
-                # ---- Value loss (MSE between predicted V and actual return) ----
+                # Critic regression target.
                 values = self.critic(obs)
                 value_loss = nn.functional.mse_loss(values, returns)
 
-                # ---- Entropy bonus (encourages exploration) ----
+                # Entropy bonus encourages exploration.
                 entropy = self.actor.entropy(obs).mean()
 
-                # ---- Total loss ----
                 loss = (
                     policy_loss
                     + cfg.value_coef * value_loss
                     - cfg.entropy_coef * entropy
                 )
 
-                # ---- Gradient step ----
                 self.optimizer.zero_grad()
                 loss.backward()
                 # Clip gradients to prevent exploding gradients
@@ -429,14 +427,24 @@ class PPOAgent:
         n_rollouts = 0
 
         while self.total_steps < cfg.total_timesteps:
-            # Step 1: Collect experience
             rollout_stats = self.collect_rollout()
             n_rollouts += 1
 
-            # Steps 2-3: Compute advantages (done in collect) and update
+            # Advantages are computed at the end of rollout collection.
             update_stats = self.update()
 
             self.rollout_stats.append({**rollout_stats, **update_stats})
+
+            if self.tb_writer is not None:
+                step = self.total_steps
+                recent = self.episode_returns[-10:] if self.episode_returns else [0.0]
+                self.tb_writer.add_scalar("rollout/mean_return", rollout_stats["mean_return"], step)
+                self.tb_writer.add_scalar("rollout/mean_return_last10", float(np.mean(recent)), step)
+                self.tb_writer.add_scalar("rollout/mean_length", rollout_stats["mean_length"], step)
+                self.tb_writer.add_scalar("rollout/episodes_completed", rollout_stats["episodes_completed"], step)
+                self.tb_writer.add_scalar("train/policy_loss", update_stats["policy_loss"], step)
+                self.tb_writer.add_scalar("train/value_loss", update_stats["value_loss"], step)
+                self.tb_writer.add_scalar("train/entropy", update_stats["entropy"], step)
 
             # Log progress
             if n_rollouts % cfg.log_interval == 0:

@@ -80,9 +80,7 @@ class SarsaAgent:
             return int(rng.integers(self.env.num_actions))
         return int(np.argmax(self.Q[state]))
 
-    # ------------------------------------------------------------------
     # Training dispatcher
-    # ------------------------------------------------------------------
 
     def train(self) -> Dict[str, float | int | str]:
         algo = self.config.algorithm
@@ -101,9 +99,7 @@ class SarsaAgent:
             "mean_return_last100": float(np.mean(self.episode_returns[-100:])),
         }
 
-    # ------------------------------------------------------------------
     # SARSA(n) Forward-View
-    # ------------------------------------------------------------------
 
     def _train_sarsa_n_forward(self) -> None:
         """SARSA(n) forward-view: n-step on-policy returns.
@@ -162,9 +158,7 @@ class SarsaAgent:
             self.episode_lengths.append(T)
             eps = max(cfg.epsilon_min, eps * cfg.epsilon_decay)
 
-    # ------------------------------------------------------------------
     # SARSA(n) Backward-View
-    # ------------------------------------------------------------------
 
     def _train_sarsa_n_backward(self) -> None:
         """SARSA(n) backward-view: eligibility traces truncated at n steps.
@@ -222,9 +216,7 @@ class SarsaAgent:
             self.episode_lengths.append(step + 1)
             eps = max(cfg.epsilon_min, eps * cfg.epsilon_decay)
 
-    # ------------------------------------------------------------------
     # SARSA(λ) Forward-View
-    # ------------------------------------------------------------------
 
     def _train_sarsa_lambda_forward(self) -> None:
         """SARSA(λ) forward-view: λ-weighted blend of n-step SARSA returns.
@@ -283,9 +275,7 @@ class SarsaAgent:
             self.episode_lengths.append(T)
             eps = max(cfg.epsilon_min, eps * cfg.epsilon_decay)
 
-    # ------------------------------------------------------------------
     # SARSA(λ) Backward-View
-    # ------------------------------------------------------------------
 
     def _train_sarsa_lambda_backward(self) -> None:
         """SARSA(λ) backward-view: online with eligibility traces.
@@ -337,9 +327,7 @@ class SarsaAgent:
             self.episode_lengths.append(step + 1)
             eps = max(cfg.epsilon_min, eps * cfg.epsilon_decay)
 
-    # ------------------------------------------------------------------
     # Evaluation
-    # ------------------------------------------------------------------
 
     def evaluate(self, episodes: int | None = None, seed: int = 9999) -> Dict[str, float]:
         """Evaluate greedy policy (ε=0)."""

@@ -2,11 +2,21 @@
 name = "rl590-minis"
 version = "0.1.0"
 description = "EECS 590 Reinforcement Learning Mini Projects"
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.11,<3.13"
 dependencies = [
     "numpy>=1.24,<3.0",
     "matplotlib>=3.7,<4.0",
     "torch>=2.0",
+    "gymnasium>=0.29,<2.0",
+    "tensorboard>=2.12",
+]
+
+[project.optional-dependencies]
+sb3 = ["stable-baselines3>=2.0,<3.0"]
+isaac = [
+    # Resolved inside the Isaac Lab container; listed here for visibility.
+    # `pip install -e .[isaac]` outside the container will not work — see
+    # docs/isaacsim_setup_issues.md.
 ]
 
 [tool.hatch.build.targets.wheel]

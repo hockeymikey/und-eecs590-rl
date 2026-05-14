@@ -94,9 +94,7 @@ class TDPredictionAgent:
         target = reward + self.config.gamma * self.V[next_state] * (1 - done)
         self.Q[state, action] += self.config.alpha * (target - self.Q[state, action])
 
-    # ------------------------------------------------------------------
     # Training dispatcher
-    # ------------------------------------------------------------------
 
     def train(self) -> Dict[str, float | int | str]:
         algo = self.config.algorithm
@@ -115,9 +113,7 @@ class TDPredictionAgent:
             "mean_return_last100": float(np.mean(self.episode_returns[-100:])),
         }
 
-    # ------------------------------------------------------------------
     # TD(n) Forward-View
-    # ------------------------------------------------------------------
 
     def _train_td_n_forward(self) -> None:
         """TD(n) forward-view: compute n-step returns, then update.
@@ -179,9 +175,7 @@ class TDPredictionAgent:
             self.episode_lengths.append(T)
             eps = max(cfg.epsilon_min, eps * cfg.epsilon_decay)
 
-    # ------------------------------------------------------------------
     # TD(n) Backward-View
-    # ------------------------------------------------------------------
 
     def _train_td_n_backward(self) -> None:
         """TD(n) backward-view: eligibility traces with n-step truncation.
@@ -242,9 +236,7 @@ class TDPredictionAgent:
             self.episode_lengths.append(step + 1)
             eps = max(cfg.epsilon_min, eps * cfg.epsilon_decay)
 
-    # ------------------------------------------------------------------
     # TD(λ) Forward-View
-    # ------------------------------------------------------------------
 
     def _train_td_lambda_forward(self) -> None:
         """TD(λ) forward-view: λ-weighted average of all n-step returns.
@@ -317,9 +309,7 @@ class TDPredictionAgent:
             self.episode_lengths.append(T)
             eps = max(cfg.epsilon_min, eps * cfg.epsilon_decay)
 
-    # ------------------------------------------------------------------
     # TD(λ) Backward-View
-    # ------------------------------------------------------------------
 
     def _train_td_lambda_backward(self) -> None:
         """TD(λ) backward-view: online updates with eligibility traces.
@@ -374,9 +364,7 @@ class TDPredictionAgent:
             self.episode_lengths.append(step + 1)
             eps = max(cfg.epsilon_min, eps * cfg.epsilon_decay)
 
-    # ------------------------------------------------------------------
     # Evaluation
-    # ------------------------------------------------------------------
 
     def evaluate(self, episodes: int | None = None, seed: int = 9999) -> Dict[str, float]:
         """Evaluate greedy policy derived from Q."""

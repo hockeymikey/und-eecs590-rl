@@ -84,7 +84,7 @@ class MCAgent:
         first_visit = cfg.method == MCMethod.FIRST_VISIT
 
         for ep in range(cfg.episodes):
-            # --- Step 1: Generate a complete episode ---
+            # Generate a complete episode under the current behavior policy.
             trajectory = []  # list of (state, action, reward)
             state = self.env.reset(rng)
 
@@ -96,7 +96,7 @@ class MCAgent:
                 if done:
                     break
 
-            # --- Step 2: Walk backward, compute returns ---
+            # Walk backward so the discounted return can be accumulated once.
             G = 0.0
             # Track which (s, a) pairs we've already seen this episode
             # (only matters for first-visit)
@@ -112,7 +112,7 @@ class MCAgent:
                     continue
                 visited.add(pair)
 
-                # --- Step 3: Update Q using incremental mean ---
+                # Incremental mean return for this state-action pair.
                 self._returns_sum[s_t, a_t] += G
                 self._returns_count[s_t, a_t] += 1
                 self.Q[s_t, a_t] = (

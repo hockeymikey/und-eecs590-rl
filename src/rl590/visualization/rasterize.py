@@ -2,8 +2,9 @@
 
 Produces static frame captures from environments for inspection,
 documentation, and debugging. Supports:
-    - Zamboni (foundation env): full rink visualization with ice quality
-      heatmap, vehicle position, and rink markings via gym_zamboni's render().
+    - Zamboni-compatible envs with a matplotlib-backed ``render()`` method:
+      full rink visualization with ice quality heatmap, vehicle position,
+      and rink markings.
     - Tabular envs (WindyChasm): grid-based policy/value heatmaps.
 
 Usage:
@@ -28,12 +29,9 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")  # non-interactive backend for saving
 import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
 
 
-# -------------------------------------------------------------------------
 # Zamboni rasterization
-# -------------------------------------------------------------------------
 
 def capture_zamboni_frame(env, output_path: str | Path | None = None) -> np.ndarray:
     """Capture the current environment state as an RGB image array.
@@ -43,8 +41,8 @@ def capture_zamboni_frame(env, output_path: str | Path | None = None) -> np.ndar
 
     Parameters
     ----------
-    env : gym_zamboni.envs.RinkEnv
-        The Zamboni environment instance (must have been reset).
+    env : object
+        Environment instance with ``render()`` and a matplotlib ``fig`` attr.
     output_path : str or Path, optional
         If provided, saves the frame as a PNG.
 
@@ -83,8 +81,8 @@ def record_zamboni_episode(
 
     Parameters
     ----------
-    env : gym_zamboni.envs.RinkEnv
-        The Zamboni environment.
+    env : object
+        Environment instance with ``render()`` and a matplotlib ``fig`` attr.
     get_action : callable
         Function that takes an observation and returns an action.
         e.g., agent.predict or lambda obs: np.zeros(2)
@@ -128,9 +126,7 @@ def record_zamboni_episode(
     return saved
 
 
-# -------------------------------------------------------------------------
 # Tabular environment rasterization
-# -------------------------------------------------------------------------
 
 def render_tabular_heatmap(
     env,
